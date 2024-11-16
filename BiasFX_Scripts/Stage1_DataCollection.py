@@ -3,8 +3,8 @@ import pandas as pd
 import os
 from datetime import datetime, timedelta
 
-# Define the currency pairs and timeframes
-CURRENCY_PAIRS = [
+# Define the base currency pairs (without suffixes)
+BASE_CURRENCY_PAIRS = [
     "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "NZDUSD",
     "USDCAD", "EURGBP", "EURJPY", "EURCHF", "GBPJPY", "GBPCHF",
     "AUDJPY", "AUDNZD", "AUDCAD", "AUDCHF", "CADJPY", "CADCHF",
@@ -34,6 +34,26 @@ def connect_mt5():
         return False
     print("Connected to MT5")
     return True
+
+def get_full_symbol_list():
+    """Retrieve all symbols available in the MT5 terminal."""
+    symbols = mt5.symbols_get()
+    return [symbol.name for symbol in symbols]
+
+def map_symbols(base_pairs, full_symbols):
+    """
+    Map base currency pairs to their full symbols (with suffixes).
+    :param base_pairs: List of base currency pairs
+    :param full_symbols: List of all symbols available in the broker
+    :return: Dictionary mapping base pairs to full symbols
+    """
+    mapped_symbols = {}
+    for base in base_pairs:
+        for full in full_symbols:
+            if full.startswith(base):
+                mapped_symbols[base] = full
+                break
+    return mapped_symbols
 
 def fetch_data(symbol, timeframe, days=1):
     """
@@ -67,13 +87,20 @@ def main():
     if not connect_mt5():
         return
 
+    # Get the list of all available symbols in the broker
+    full_symbols = get_full_symbol_list()
+
+    # Map base currency pairs to their full symbols
+    mapped_symbols = map_symbols(BASE_CURRENCY_PAIRS, full_symbols)
+    print("Mapped Symbols:", mapped_symbols)
+
     # Create the main output folder if it doesn't exist
     if not os.path.exists(OUTPUT_FOLDER):
         os.mkdir(OUTPUT_FOLDER)
 
-    for pair in CURRENCY_PAIRS:
+    for base_pair, full_symbol in mapped_symbols.items():
         # Create a folder for each currency pair
-        pair_folder = os.path.join(OUTPUT_FOLDER, pair)
+        pair_folder = os.path.join(OUTPUT_FOLDER, base_pair)
         if not os.path.exists(pair_folder):
             os.mkdir(pair_folder)
 
@@ -82,11 +109,11 @@ def main():
             filename = f"{tf_name}.csv"
             filepath = os.path.join(pair_folder, filename)
 
-            print(f"Fetching {pair} data for {tf_name}")
-            df = fetch_data(pair, tf_value, days=1)  # Fetch last 1 day's data
+            print(f"Fetching {full_symbol} data for {tf_name}")
+            df = fetch_data(full_symbol, tf_value, days=1)  # Fetch last 1 day's data
             if df is not None:
                 save_csv(df, filepath)
-                print(f"Saved {tf_name} data for {pair} to {filepath}")
+                print(f"Saved {tf_name} data for {full_symbol} to {filepath}")
 
     mt5.shutdown()
     print("MT5 connection closed.")

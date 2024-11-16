@@ -17,18 +17,36 @@ def initialize_mt5():
         quit()
 
 def validate_symbol(symbol):
-    """Validate if the trading symbol exists and is visible."""
-    symbol_info = mt5.symbol_info(symbol)
-    if symbol_info is None:
+    """Validate if the trading symbol exists and is visible, accommodating brokers with suffixes."""
+    # Retrieve all available symbols from the broker
+    available_symbols = mt5.symbols_get()
+    
+    # Search for the entered symbol (case insensitive) in the list of available symbols
+    matched_symbol = None
+    for sym in available_symbols:
+        if sym.name.upper() == symbol.upper():
+            matched_symbol = sym.name
+            break
+        # Check for suffixes (e.g., BTCUSDm)
+        if sym.name.upper().startswith(symbol.upper()):
+            matched_symbol = sym.name
+            break
+
+    if matched_symbol is None:
         print(f"Symbol '{symbol}' not found.")
         return False
+
+    # Make the matched symbol visible if necessary
+    symbol_info = mt5.symbol_info(matched_symbol)
     if not symbol_info.visible:
-        print(f"Symbol '{symbol}' is not visible in the market watch. Adding symbol...")
-        if not mt5.symbol_select(symbol, True):
-            print(f"Failed to add symbol '{symbol}' to the market watch.")
+        print(f"Symbol '{matched_symbol}' is not visible in the market watch. Adding symbol...")
+        if not mt5.symbol_select(matched_symbol, True):
+            print(f"Failed to add symbol '{matched_symbol}' to the market watch.")
             return False
-    print(f"Symbol '{symbol}' is valid and ready for trading.")
-    return True
+
+    print(f"Symbol '{matched_symbol}' is valid and ready for trading.")
+    return matched_symbol
+
 
 def get_daily_atr(symbol):
     """Calculate ATR for the daily timeframe."""
@@ -229,8 +247,9 @@ def monitor_pending_orders(symbol, bias):
 def hedging_logic():
     """Main hedging logic."""
     initialize_mt5()
-    symbol = input("Enter the trading symbol (e.g., EURUSD, BTCUSD): ").strip().upper()
-    if not validate_symbol(symbol):
+    input_symbol = input("Enter the trading symbol (e.g., EURUSD, BTCUSD): ").strip().upper()
+    symbol = validate_symbol(input_symbol)  # Use the updated validate_symbol
+    if not symbol:
         print("Exiting the program due to invalid symbol.")
         mt5.shutdown()
         return
@@ -270,6 +289,7 @@ def hedging_logic():
     # Step 8: Monitor Orders until conditions in Point 6 or 7 are met
     monitor_pending_orders(symbol, bias=0)
     mt5.shutdown()
+
 
 if __name__ == "__main__":
     hedging_logic()
